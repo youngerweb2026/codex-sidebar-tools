@@ -43,3 +43,11 @@ test('Windows folders use Explorer as a literal executable argument',async()=>{
 test('empty Windows process output is an empty list',()=>{
   assert.deepEqual(listProcesses({platform:'win32',run:()=>''}),[]);assert.deepEqual(listProcesses({platform:'win32',run:()=>'null'}),[]);
 });
+test('receipt ownership queries target one Windows PID and reject injected filters',()=>{
+  let command='';
+  const result=listProcesses({platform:'win32',pid:8123,run:(_file,args)=>{
+    command=args.at(-1);return JSON.stringify({ProcessId:8123,ExecutablePath:'C:\\Node\\node.exe',CommandLine:'node fixture'});
+  }});
+  assert.match(command,/-Filter "ProcessId = 8123"/);assert.equal(result[0].pid,8123);
+  for(const pid of ['8123 OR 1=1',-1,NaN])assert.throws(()=>listProcesses({platform:'win32',pid,run:()=>{throw Error('Must not run');}}),{code:'INVALID_PID'});
+});

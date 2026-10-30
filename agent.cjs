@@ -860,7 +860,7 @@ async function main() {
   recoveryTick().catch(()=>{});
 }
 
-function acquireRuntimeReceipt(dataDir, token) {
+function acquireRuntimeReceipt(dataDir, token, {processes=options=>require('./platform.cjs').listProcesses(options)}={}) {
   if (!token) return () => {};
   const fs = require('node:fs'), path = require('node:path');
   const directory = path.join(dataDir, 'runtime'), file = path.join(directory, 'agent.json');
@@ -874,7 +874,7 @@ function acquireRuntimeReceipt(dataDir, token) {
     try{process.kill(previous.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;else throw error;}
     if(alive) {
       if(previous.pid===process.pid)throw new Error('A sidebar agent is already running');
-      const row=require('./platform.cjs').listProcesses().find(item=>item.pid===previous.pid);
+      const row=processes({pid:previous.pid}).find(item=>item.pid===previous.pid);
       if(!row?.commandLine)throw new Error('Cannot verify the previous agent process');
       const line=process.platform==='win32'?row.commandLine.toLowerCase():row.commandLine;
       const script=process.platform==='win32'?__filename.toLowerCase():__filename;

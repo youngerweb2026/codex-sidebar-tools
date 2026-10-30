@@ -37,7 +37,10 @@ test('a reused PID does not block startup or terminate the unrelated process',as
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sidebar-reused-pid-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const file=path.join(dir,'runtime/agent.json'),token='12345678-1234-1234-1234-123456789abc';
   fs.mkdirSync(path.dirname(file));fs.writeFileSync(file,JSON.stringify({pid:child.pid,token,startedAt:1}));
-  const release=acquireRuntimeReceipt(dir,token);
+  const release=acquireRuntimeReceipt(dir,token,{processes:options=>{
+    assert.equal(options.pid,child.pid);
+    return [{pid:child.pid,commandLine:process.execPath+' -e fixture-unrelated-process'}];
+  }});
   assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).pid,process.pid);
   assert.doesNotThrow(()=>process.kill(child.pid,0));release();
 });

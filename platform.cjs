@@ -121,8 +121,9 @@ async function openTarget(kind,target,{platform=process.platform,env=process.env
   if(!chrome)throw fault('CHROME_NOT_FOUND','未找到 Google Chrome，请先安装 Chrome。');
   return (run||launchDetached)(chrome,[normalized],{windowsHide:true});
 }
-function listProcesses({platform=process.platform,run=systemRun}={}) {
-  if(platform==='win32')return psJson("Get-CimInstance Win32_Process -ErrorAction Stop | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress",run).map(x=>({pid:Number(x.ProcessId),executable:x.ExecutablePath||'',commandLine:x.CommandLine||''}));
+function listProcesses({platform=process.platform,run=systemRun,pid}={}) {
+  if(pid!==undefined&&(!Number.isSafeInteger(pid)||pid<1))throw fault('INVALID_PID','进程编号无效。');
+  if(platform==='win32')return psJson('Get-CimInstance Win32_Process'+(pid===undefined?'':` -Filter "ProcessId = ${pid}"`)+" -ErrorAction Stop | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress",run).map(x=>({pid:Number(x.ProcessId),executable:x.ExecutablePath||'',commandLine:x.CommandLine||''}));
   return String(run('/bin/ps',['-Ao','pid=,command='])).split('\n').flatMap(line=>{const m=/^\s*(\d+)\s+(.+)$/.exec(line);return m?[{pid:Number(m[1]),executable:'',commandLine:m[2]}]:[];});
 }
 module.exports={DEFAULT_PORT,getPaths,discoverApp,discoverCli,createRuntimeLocator,openTarget,appCandidates,cliCandidates,listProcesses,systemRun,fault};
