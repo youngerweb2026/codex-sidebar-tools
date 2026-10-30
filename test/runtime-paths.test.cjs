@@ -5,27 +5,31 @@ const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
 const {createRuntimeLocator}=require('../platform.cjs');
-
-test('macOS runtime lookup is lazy and recovers after the selected app is replaced',t=>{
+function macFilesystem(t,name) {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'sidebar-runtime-'));
   t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
-  const app=path.join(root,'Custom Codex.app'),old=path.join(app,'Contents/Resources/codex-cli/bin/codex');
-  const locate=createRuntimeLocator({app,cli:old,platform:'darwin'});
+  const app='/Runtime Fixture/'+name;
+  const native=value=>path.join(root,...path.posix.relative('/Runtime Fixture',value).split('/'));
+  const write=(value,text)=>{fs.mkdirSync(path.dirname(native(value)),{recursive:true});fs.writeFileSync(native(value),text);};
+  return {app,native,write,exists:value=>fs.existsSync(native(value))};
+}
+
+test('macOS runtime lookup is lazy and recovers after the selected app is replaced',t=>{
+  const f=macFilesystem(t,'Custom Codex.app'),app=f.app,old=path.posix.join(app,'Contents/Resources/codex-cli/bin/codex');
+  const locate=createRuntimeLocator({app,cli:old,platform:'darwin',exists:f.exists});
   assert.throws(locate,{code:'APP_NOT_FOUND'});
-  fs.mkdirSync(path.dirname(old),{recursive:true});fs.writeFileSync(old,'old');
+  f.write(old,'old');
   assert.deepEqual(locate(),{app,cli:old});
-  fs.rmSync(app,{recursive:true});assert.throws(locate,{code:'APP_NOT_FOUND'});
-  const replacement=path.join(app,'Contents/Resources/codex');fs.mkdirSync(path.dirname(replacement),{recursive:true});fs.writeFileSync(replacement,'new');
+  fs.rmSync(f.native(app),{recursive:true});assert.throws(locate,{code:'APP_NOT_FOUND'});
+  const replacement=path.posix.join(app,'Contents/Resources/codex');f.write(replacement,'new');
   assert.deepEqual(locate(),{app,cli:replacement});
 });
 test('bundled settings are re-enumerated even if the old alternate CLI still exists',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'sidebar-runtime-'));
-  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
-  const app=path.join(root,'Codex.app'),old=path.join(app,'Contents/Resources/codex');
-  fs.mkdirSync(path.dirname(old),{recursive:true});fs.writeFileSync(old,'old');
-  const locate=createRuntimeLocator({app,cli:old,platform:'darwin'});
+  const f=macFilesystem(t,'Codex.app'),app=f.app,old=path.posix.join(app,'Contents/Resources/codex');
+  f.write(old,'old');
+  const locate=createRuntimeLocator({app,cli:old,platform:'darwin',exists:f.exists});
   assert.equal(locate().cli,old);
-  const current=path.join(app,'Contents/Resources/codex-cli/bin/codex');fs.mkdirSync(path.dirname(current),{recursive:true});fs.writeFileSync(current,'new');
+  const current=path.posix.join(app,'Contents/Resources/codex-cli/bin/codex');f.write(current,'new');
   assert.equal(locate().cli,current);
 });
 test('an explicit external CLI and custom app remain selected through update gaps',()=>{

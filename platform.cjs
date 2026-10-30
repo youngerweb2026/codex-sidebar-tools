@@ -39,7 +39,7 @@ function appCandidates({platform=process.platform, home=os.homedir(), env=proces
     p.join(local,'OpenAI','Codex','Codex.exe'),p.join(env.ProgramFiles || 'C:\\Program Files','Codex','Codex.exe')];
 }
 function cliCandidates(app,{platform=process.platform,home=os.homedir(),env=process.env,readdir=fs.readdirSync,stat=fs.statSync}={}) {
-  if(platform==='darwin')return [path.join(app,'Contents/Resources/codex-cli/bin/codex'),path.join(app,'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'),path.join(app,'Contents/Resources/codex')];
+  if(platform==='darwin')return [path.posix.join(app,'Contents/Resources/codex-cli/bin/codex'),path.posix.join(app,'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'),path.posix.join(app,'Contents/Resources/codex')];
   const p=path.win32,root=p.dirname(app),local=env.LOCALAPPDATA || p.join(home,'AppData/Local'),managed=p.join(local,'OpenAI','Codex','bin');
   let versions=[];
   try{versions=readdir(managed,{withFileTypes:true}).filter(entry=>entry.isDirectory()).map(entry=>p.join(managed,entry.name,'codex.exe')).sort((a,b)=>{try{return stat(b).mtimeMs-stat(a).mtimeMs;}catch{return 0;}});}catch{}
