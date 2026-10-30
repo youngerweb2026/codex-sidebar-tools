@@ -29,3 +29,15 @@ test('runtime receipt only releases its own process record',t=>{
   fs.writeFileSync(file,JSON.stringify({pid:process.pid,token:'87654321-4321-4321-4321-cba987654321'}));
   release();assert.equal(fs.existsSync(file),true);
 });
+test('a reused PID does not block startup or terminate the unrelated process',async t=>{
+  const {spawn}=require('node:child_process');
+  const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore',windowsHide:true});
+  await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
+  t.after(()=>{child.kill();});
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sidebar-reused-pid-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const file=path.join(dir,'runtime/agent.json'),token='12345678-1234-1234-1234-123456789abc';
+  fs.mkdirSync(path.dirname(file));fs.writeFileSync(file,JSON.stringify({pid:child.pid,token,startedAt:1}));
+  const release=acquireRuntimeReceipt(dir,token);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).pid,process.pid);
+  assert.doesNotThrow(()=>process.kill(child.pid,0));release();
+});

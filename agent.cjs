@@ -850,11 +850,20 @@ function acquireRuntimeReceipt(dataDir, token) {
   try {
     const stat=fs.lstatSync(file);
     if(stat.isSymbolicLink() || !stat.isFile() || stat.size>2048)throw new Error('Unexpected runtime receipt');
-    const previous=JSON.parse(fs.readFileSync(file,'utf8'));
+    const previousText=fs.readFileSync(file,'utf8'),previous=JSON.parse(previousText);
     if(!Number.isSafeInteger(previous.pid) || previous.pid<1 || !/^[a-f0-9-]{36}$/i.test(previous.token||''))throw new Error('Invalid runtime receipt');
     let alive=true;
     try{process.kill(previous.pid,0);}catch(error){if(error.code==='ESRCH')alive=false;else throw error;}
-    if(alive)throw new Error('A sidebar agent is already running');
+    if(alive) {
+      if(previous.pid===process.pid)throw new Error('A sidebar agent is already running');
+      const row=require('./platform.cjs').listProcesses().find(item=>item.pid===previous.pid);
+      if(!row?.commandLine)throw new Error('Cannot verify the previous agent process');
+      const line=process.platform==='win32'?row.commandLine.toLowerCase():row.commandLine;
+      const script=process.platform==='win32'?__filename.toLowerCase():__filename;
+      if(line.includes(script) && line.includes('--instance-token'))throw new Error('A sidebar agent is already running');
+      // The PID was reused after an abrupt exit. Never signal that unrelated process.
+    }
+    if(fs.readFileSync(file,'utf8')!==previousText)throw new Error('Runtime receipt changed during verification');
     fs.unlinkSync(file);
   } catch(error) {if(error.code!=='ENOENT')throw error;}
   const receipt={pid:process.pid,token,startedAt:Date.now()};

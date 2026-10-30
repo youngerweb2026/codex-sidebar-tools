@@ -6,7 +6,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {createManager,parseArgs,winQuote}=require('../manage.cjs');
 const {getPaths}=require('../platform.cjs');
-function fixture(t,{fetchImpl=async()=>{throw Error('offline');}}={}){
+function fixture(t,{fetchImpl=async()=>{throw Error('offline');},leaveReceiptOnStop=false,afterStop}={}){
   const home=fs.mkdtempSync(path.join(os.tmpdir(),'sidebar-manager-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const platform=process.platform==='win32'?'win32':'darwin',env={...process.env,LOCALAPPDATA:path.join(home,'Local'),APPDATA:path.join(home,'Roaming')};
   const paths=getPaths({platform,home,env});const app=platform==='win32'?path.join(home,'Custom App','ChatGPT.exe'):path.join(home,'Custom App','Codex.app');
@@ -18,7 +18,7 @@ function fixture(t,{fetchImpl=async()=>{throw Error('offline');}}={}){
     fs.mkdirSync(path.dirname(paths.pidPath),{recursive:true});fs.writeFileSync(paths.pidPath,JSON.stringify({pid:9001,token:m.token,startedAt:Date.now()}));
     processes=[{pid:9001,executable:process.execPath,commandLine:`${process.execPath} "${path.join(paths.installDir,'agent.cjs')}" --data-dir "${paths.installDir}" --instance-token ${m.token}`}];active=true;
   }
-  function stop(){processes=[];active=false;try{fs.unlinkSync(paths.pidPath);}catch{}}
+  function stop(){processes=[];active=false;if(afterStop)afterStop(paths);if(!leaveReceiptOnStop){try{fs.unlinkSync(paths.pidPath);}catch{}}}
   function run(file,args){
     calls.push({file,args});if(file===cli)return 'codex-cli test-version';
     if(file==='/bin/ps')return processes.map(p=>p.pid+' '+p.commandLine).join('\n');
@@ -79,4 +79,16 @@ test('reinstallation uses the currently invoked Node executable, not a stale old
   const f=fixture(t);await f.manager.install({app:f.app,cli:f.cli});
   const m=JSON.parse(fs.readFileSync(f.paths.manifestPath,'utf8'));m.nodePath=path.join(f.home,'removed-node');fs.writeFileSync(f.paths.manifestPath,JSON.stringify(m));
   assert.equal(f.manager.configuration().nodePath,process.execPath);
+});
+test('a forced agent exit removes only its own matching stale receipt after PID exit',async t=>{
+  const f=fixture(t,{leaveReceiptOnStop:true});await f.manager.install({app:f.app,cli:f.cli});
+  assert.equal(fs.existsSync(f.paths.pidPath),true);await f.manager.stopAgent();
+  assert.equal(fs.existsSync(f.paths.pidPath),false);
+  if(f.platform==='win32')assert.equal(f.calls.some(c=>c.file==='taskkill.exe'&&c.args.includes('/T')),true);
+});
+test('stop-agent leaves a replacement receipt owned by another instance untouched',async t=>{
+  const replacement={pid:123456,token:'00000000-0000-0000-0000-000000000000',startedAt:1};
+  const f=fixture(t,{leaveReceiptOnStop:true,afterStop:paths=>fs.writeFileSync(paths.pidPath,JSON.stringify(replacement))});
+  await f.manager.install({app:f.app,cli:f.cli});await f.manager.stopAgent();
+  assert.deepEqual(JSON.parse(fs.readFileSync(f.paths.pidPath,'utf8')),replacement);
 });

@@ -45,6 +45,18 @@ function createManager({platform=process.platform,home=os.homedir(),env=process.
     if(!line.includes(needle)||!line.includes('--instance-token')||!line.includes(m.token))throw fault('PROCESS_NOT_OWNED','后台 PID 已不属于本项目，拒绝结束该进程。');
     return record;
   }
+  function removeStoppedReceipt(record,m){
+    if(!record||record.token!==m.token||processList().some(row=>row.pid===record.pid))return;
+    try{
+      const before=fs.lstatSync(paths.pidPath);
+      if(before.isSymbolicLink()||!before.isFile()||before.size>2048)return;
+      const current=JSON.parse(fs.readFileSync(paths.pidPath,'utf8'));
+      if(current.pid!==record.pid||current.token!==record.token)return;
+      const after=fs.lstatSync(paths.pidPath);
+      if(after.isSymbolicLink()||!after.isFile()||['dev','ino','size','mtimeMs'].some(key=>before[key]!==after[key]))return;
+      fs.unlinkSync(paths.pidPath);
+    }catch(error){if(error.code!=='ENOENT')throw error;}
+  }
   function legacyActive(){
     if(platform==='darwin'){try{return /\b(?:pid = \d+|state = running)/.test(String(run('/bin/launchctl',['print',`gui/${uid}/com.codexusagebadge.agent`])));}catch{return false;}}
     return processList().some(p=>/codexusagebadge/i.test(p.commandLine)&&/agent\.cjs/i.test(p.commandLine));
@@ -99,7 +111,7 @@ function createManager({platform=process.platform,home=os.homedir(),env=process.
       if(platform==='win32')run('taskkill.exe',['/PID',String(record.pid),'/T','/F']);else kill(record.pid,'SIGTERM');
     }
     for(let n=0;n<40;n++){
-      if(!ownedProcess(m))return {running:false};await wait(100);
+      if(!ownedProcess(m)){removeStoppedReceipt(record,m);return {running:false};}await wait(100);
     }
     throw fault('STOP_FAILED','后台任务未能退出，请稍后重试。');
   }
