@@ -1,0 +1,51 @@
+name: Test and package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node 24 · ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Syntax checks
+        run: npm run check
+      - name: Module and filesystem tests
+        run: npm test
+      - name: Windows PowerShell entry smoke test (read only)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/manage.ps1 status --app 'C:\Example App\ChatGPT.exe' --codex-bin 'C:\Example App\resources\codex.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: macOS entry smoke test (read only)
+        if: runner.os == 'macOS'
+        run: bash scripts/entry.sh status
+      - name: Build both platform archives
+        run: npm run package
+      - name: Retain release candidates
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-sidebar-tools-release-candidates
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error

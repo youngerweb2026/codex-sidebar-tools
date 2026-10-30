@@ -1,0 +1,17 @@
+{
+  "name": "codex-sidebar-tools",
+  "version": "0.1.0-beta.1",
+  "private": true,
+  "description": "Unofficial local Codex desktop sidebar: usage, countdowns, shortcuts and notes.",
+  "license": "MIT",
+  "engines": {"node": ">=24"},
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check agent.cjs && node --check tools-ui.cjs && node --check tools-store.cjs && node --check platform.cjs && node --check manage.cjs",
+    "package": "node scripts/package-release.cjs",
+    "preview": "node scripts/preview.cjs"
+  },
+  "repository": {"type": "git", "url": "https://github.com/youngerweb2026/codex-sidebar-tools.git"},
+  "bugs": {"url": "https://github.com/youngerweb2026/codex-sidebar-tools/issues"},
+  "homepage": "https://github.com/youngerweb2026/codex-sidebar-tools#readme"
+}
