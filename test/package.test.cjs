@@ -12,9 +12,12 @@ test('release allowlist includes only matching launch scripts and public inputs'
   const mac = packageFiles('macos'), windows = packageFiles('windows');
   assert.ok(mac.includes('scripts/打开Codex.command'));
   assert.ok(mac.includes('scripts/entry.sh'));
+  assert.ok(mac.includes('scripts/恢复插件.command'));
   assert.ok(!mac.some(file => /\.cmd$|\.ps1$/.test(file)));
   assert.ok(windows.includes('scripts/打开Codex.cmd'));
   assert.ok(windows.includes('scripts/manage.ps1'));
+  assert.ok(windows.includes('scripts/恢复插件.cmd'));
+  assert.ok(mac.includes('recovery.cjs') && windows.includes('recovery.cjs'));
   assert.ok(!windows.some(file => file.endsWith('.command')));
   for (const file of [...mac, ...windows]) assert.ok(!/(?:^|\/)data\/|sidebar-data|state\.json|\.env|\.log|test\//.test(file));
   assert.throws(() => packageFiles('linux'), /Unknown package platform/);
@@ -23,7 +26,7 @@ test('release allowlist includes only matching launch scripts and public inputs'
 test('ZIP builds are reproducible and exclude private fixture data', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-sidebar-package-test-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
-  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({name:'codex-sidebar-tools',version:'0.1.0-beta.1',scripts:{test:'node --test'}}));
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({name:'codex-sidebar-tools',version:'0.1.0-beta.2',scripts:{test:'node --test'}}));
   for (const relative of new Set([...packageFiles('macos'), ...packageFiles('windows')])) {
     const file = path.join(root, relative); fs.mkdirSync(path.dirname(file), {recursive:true}); fs.writeFileSync(file, relative + '\n');
   }
@@ -44,5 +47,5 @@ test('ZIP builds are reproducible and exclude private fixture data', t => {
   assert.ok(!archive.names.some(name => name.includes('/data/') || name.includes('sidebar-data') || name.endsWith('/.env')));
   assert.deepEqual(archive.package.scripts,{start:'node manage.cjs launch'});
   const checksums = fs.readFileSync(first[2],'utf8');
-  assert.match(checksums,/^[0-9a-f]{64}  codex-sidebar-tools-0\.1\.0-beta\.1-macos\.zip\n[0-9a-f]{64}  codex-sidebar-tools-0\.1\.0-beta\.1-windows\.zip\n$/);
+  assert.match(checksums,/^[0-9a-f]{64}  codex-sidebar-tools-0\.1\.0-beta\.2-macos\.zip\n[0-9a-f]{64}  codex-sidebar-tools-0\.1\.0-beta\.2-windows\.zip\n$/);
 });

@@ -16,7 +16,7 @@
 1. 下载 Windows ZIP 和 `SHA256SUMS.txt`，在 PowerShell 核对：
 
    ```powershell
-   Get-FileHash .\codex-sidebar-tools-0.1.0-beta.1-windows.zip -Algorithm SHA256
+   Get-FileHash .\codex-sidebar-tools-0.1.0-beta.2-windows.zip -Algorithm SHA256
    ```
 
 2. 右键 ZIP 选择“全部解压”，保持文件夹完整，双击 `scripts\安装.cmd`。也可在项目目录运行：
@@ -57,10 +57,29 @@ node .\manage.cjs install --app "C:\Path\To\Codex.exe" --codex-bin "C:\Path\To\r
 node .\manage.cjs status
 node .\manage.cjs stop-agent
 node .\manage.cjs start-agent
+node .\manage.cjs recover
 node .\manage.cjs uninstall
 ```
 
 也可使用 `scripts\诊断.cmd` 和 `scripts\卸载.cmd`。卸载移除本项目的启动项，将程序归档到安装目录内的 `backups\uninstalled-时间戳`，保留 `data`、设置与安装清单。不卸载 Codex，也不自动处理旧版插件；若需额外清除个人数据，请先自行备份。
+
+## 更新与恢复
+
+升级本项目时，先备份 `%LOCALAPPDATA%\CodexSidebarTools\data\state.json`，下载并完整解压新 Windows ZIP，再运行 `scripts\安装.cmd`。安装更新程序，保留已有会员日期、便签和快捷入口；不用先卸载。
+
+后台会检测客户端更新，重新发现 Microsoft Store 注册的应用位置与当前托管 CLI。更新期间暂时缺文件会进入重试，不需要改动 `WindowsApps` 权限。
+
+如果新客户端已在运行却没有开启本机连接，后台会记录一次待办。保存工作并完全退出客户端后，等待约10秒，让后台尝试重新打开并加载；没有待处理恢复时，普通退出后保持关闭。
+
+备用恢复入口为 `scripts\恢复插件.cmd`，也可运行：
+
+```powershell
+node .\manage.cjs recover
+```
+
+客户端已关闭时尝试直接打开，运行但缺少连接时安排退出后恢复；已经连接时只让后台继续加载侧栏，不会结束正在工作的窗口。Windows Script Host 登录启动项不可用时，手动恢复入口可用于启动后台。无需修改永久 PowerShell 执行策略。
+
+本项目不会自动下载自身更新。恢复流程主要处理启动参数和路径变化，不能承诺兼容未来所有客户端界面或内部协议。
 
 ## 常见情况
 
@@ -68,9 +87,9 @@ node .\manage.cjs uninstall
 | --- | --- |
 | 找不到 Node | 安装原生 Node.js 24+ 后重新打开终端，确认 `node --version`。 |
 | 找不到桌面客户端或 CLI | 确认客户端可正常运行，使用 `--app` 与 `--codex-bin` 指定正确路径。 |
-| 已有客户端运行但工具栏不出现 | 保存工作并自行完全退出，再使用本项目“打开Codex”入口。不要反复强制结束进程。 |
+| 已有客户端运行但工具栏不出现 | 运行“恢复插件”，保存工作并完全退出，等待后台自动重新加载。 |
 | 旧版插件仍在运行 | 自行选择启用哪个版本；新版不会自动卸载或停用旧版。 |
-| 更新客户端后不显示 | 内部接口可能改变，提供系统和客户端版本、复现步骤及脱敏错误。 |
+| 更新客户端后不显示 | 先完全退出并等待约10秒，或运行“恢复插件”；仍失败时提供系统、客户端版本及脱敏错误。 |
 | 网页打不开 | 检查 Google Chrome 已安装，入口为完整的 HTTP／HTTPS 网址。 |
 
 不要转发调试端口，不要公开账号登录文件、私人便签或未经脱敏的日志。详见[安全说明](../SECURITY.md)。

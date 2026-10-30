@@ -7,11 +7,11 @@ const crypto = require('node:crypto');
 const {spawnSync} = require('node:child_process');
 
 const COMMON = [
-  'agent.cjs', 'tools-ui.cjs', 'tools-store.cjs', 'platform.cjs', 'manage.cjs',
+  'agent.cjs', 'tools-ui.cjs', 'tools-store.cjs', 'platform.cjs', 'manage.cjs', 'recovery.cjs',
   'README.md', 'LICENSE', 'NOTICE.md', 'SECURITY.md', 'CHANGELOG.md',
   'docs/macos.md', 'docs/windows.md', 'docs/usage.md', 'docs/testing.md', 'docs/images/interface.png'
 ];
-const ENTRIES = ['安装', '打开Codex', '卸载', '诊断'];
+const ENTRIES = ['安装', '打开Codex', '恢复插件', '卸载', '诊断'];
 function packageFiles(platform) {
   if (!['macos', 'windows'].includes(platform)) throw new Error('Unknown package platform');
   const scripts = platform === 'macos' ? [...ENTRIES.map(name => `scripts/${name}.command`), 'scripts/entry.sh'] :

@@ -673,7 +673,7 @@ function resolveCodexBin(explicit, appPath, platform = process.platform) {
   return require('./platform.cjs').discoverCli(appPath,{platform,explicit});
 }
 
-var AGENT_VERSION = '0.1.0-beta.1';
+var AGENT_VERSION = '0.1.0-beta.2';
 
 function parseArgs(argv) {
   const options = {
@@ -706,8 +706,9 @@ function log(message) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  options.appPath = require('./platform.cjs').discoverApp({explicit:options.appPath});
-  options.codexBin = resolveCodexBin(options.codexBin, options.appPath);
+  // Keep original hints separate from resolved paths. Store updates can retain
+  // retired directories or temporarily remove bundled executables.
+  const locateRuntime = require('./platform.cjs').createRuntimeLocator({app:options.appPath,cli:options.codexBin});
   log(`codex-sidebar-tools v${AGENT_VERSION} started: local CDP + Codex app-server only.`);
 
   const releaseReceipt = acquireRuntimeReceipt(options.dataDir, options.instanceToken);
@@ -722,6 +723,20 @@ async function main() {
   let nextRead = 0;
   let failures = 0;
   let connected = false;
+  let recovery=null,recoveryTimer=null;
+  if(options.instanceToken) {
+    const {RecoveryController,createRecoveryStore,createSystemAdapter}=require('./recovery.cjs');
+    try {
+      recovery=new RecoveryController(createSystemAdapter({app:options.appPath,cli:options.codexBin,
+        dataDir:options.dataDir,token:options.instanceToken,connected:()=>injector.sessions.size>0,locate:locateRuntime}),
+        {store:createRecoveryStore(options.dataDir,options.instanceToken)});
+    } catch {log('自动恢复元数据需要检查；额度和工具栏仍会继续尝试连接。');}
+  }
+  const recoveryTick=async()=>{
+    if(stopped||!recovery)return;
+    await recovery.poll();
+    if(!stopped)recoveryTimer=setTimeout(recoveryTick,recovery.nextCheckMs);
+  };
 
   injector.currentValue = {
     percent: null,
@@ -757,9 +772,9 @@ async function main() {
 
     try {
       if (!client) {
-        options.codexBin = resolveCodexBin(options.codexBin, options.appPath);
+        const runtime=locateRuntime();
         const current = new AppServerClient({
-          command: options.codexBin,
+          command: runtime.cli,
           debug: false
         });
         client = current;
@@ -828,6 +843,8 @@ async function main() {
   const shutdown = () => {
     stopped = true;
     clearInterval(timer);
+    clearTimeout(recoveryTimer);
+    recovery?.stop();
     const old = client;
     client = null;
     old?.stop();
@@ -840,6 +857,7 @@ async function main() {
   process.once('SIGTERM', shutdown);
 
   await guardedTick();
+  recoveryTick().catch(()=>{});
 }
 
 function acquireRuntimeReceipt(dataDir, token) {

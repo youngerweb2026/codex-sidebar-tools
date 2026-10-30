@@ -9,7 +9,7 @@
 1. 下载 macOS ZIP 和 `SHA256SUMS.txt`，核对后完整解压：
 
    ```sh
-   shasum -a 256 codex-sidebar-tools-0.1.0-beta.1-macos.zip
+   shasum -a 256 codex-sidebar-tools-0.1.0-beta.2-macos.zip
    ```
 
 2. 双击解压目录内的 `scripts/安装.command`。也可进入项目目录执行：
@@ -33,7 +33,7 @@
 - 程序与本地数据目录：`~/Library/Application Support/CodexSidebarTools/`。
 - 独立 LaunchAgent：`com.buerhe.codex-sidebar-tools`。
 - 本机调试端口：`127.0.0.1:39223`。
-- 使用本包的“打开Codex”入口启动；原图标不保证加载。
+- 首次使用本包的“打开Codex”入口启动；后台会检测后续更新或缺少本机连接的启动，并安排退出后恢复。
 
 安装器可探测常见的 `Codex.app`／`ChatGPT.app` 位置。未自动找到时，在项目目录指定桌面应用和内置 CLI：
 
@@ -47,12 +47,29 @@ node manage.cjs install --app "/Applications/Codex.app" --codex-bin "/Applicatio
 
 本项目不会自动停用或卸载旧版 Codex Usage Card／Usage Badge。检测到旧版正在启用或当前客户端不使用本项目端口时，会提示你手动处理，不会强制关闭客户端。请先决定使用哪个版本，再自行停用另一个版本。
 
+## 更新与恢复
+
+升级本项目时，先备份安装目录下的 `data/state.json`，下载并完整解压新版本，再运行新包的 `scripts/安装.command`。安装会更新本项目程序，保留会员日期、便签和快捷入口；不用先卸载。
+
+客户端更新后，后台会重新检查应用和内置 CLI。检测到缺少连接的活动窗口时，只记录一次恢复待办；等你保存工作并按⌘Q完全退出后，再尝试自动打开并加载。等待约10秒。没有待处理恢复时，客户端普通退出后保持关闭。
+
+手动恢复入口为 `scripts/恢复插件.command`，或在新包目录执行：
+
+```sh
+node manage.cjs recover
+```
+
+该入口在客户端已关闭时尝试直接打开，在客户端运行但缺少连接时安排退出后恢复；已经连接时只让后台继续加载侧栏。它不会替你关闭活动工作窗口。需要恢复时避免同时运行多个入口。后台重启后会继续本次开机内有效的待办；待办不是永久开机自动打开客户端的指令。
+
+本项目不会自动下载自身更新。若客户端内部侧栏或协议发生变化，启动恢复不能保证修复所有界面兼容问题，请附版本与脱敏错误反馈。
+
 ## 诊断和卸载
 
 ```sh
 node manage.cjs status
 node manage.cjs stop-agent
 node manage.cjs start-agent
+node manage.cjs recover
 node manage.cjs uninstall
 ```
 

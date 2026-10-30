@@ -46,10 +46,10 @@ function cliCandidates(app,{platform=process.platform,home=os.homedir(),env=proc
   // Never use the desktop Codex.exe/ChatGPT.exe as app-server, even on case-insensitive filesystems.
   return [...versions,p.join(managed,'codex.exe'),p.join(root,'resources','codex.exe'),p.join(root,'resources','codex-cli','bin','codex.exe'),p.join(root,'resources','codex-cli','codex.exe')];
 }
-function discoverApp({platform=process.platform,home=os.homedir(),env=process.env,explicit,exists=fs.existsSync,run=systemRun}={}) {
+function discoverApp({platform=process.platform,home=os.homedir(),env=process.env,explicit,exists=fs.existsSync,run=systemRun,readdir=fs.readdirSync,stat=fs.statSync}={}) {
   const p=platform==='win32'?path.win32:path.posix;
   if(explicit){validPath(explicit,p,'客户端');if(!exists(explicit))throw fault('APP_NOT_FOUND','指定的客户端路径不存在。');return explicit;}
-  const app=appCandidates({platform,home,env,run}).find(candidate=>exists(candidate)&&cliCandidates(candidate,{platform,home,env}).some(exists));
+  const app=appCandidates({platform,home,env,run}).find(candidate=>exists(candidate)&&cliCandidates(candidate,{platform,home,env,readdir,stat}).some(exists));
   if(!app)throw fault('APP_NOT_FOUND','未找到支持的 Codex/ChatGPT 桌面客户端。请使用 --app 指定 .app 或桌面 .exe 的完整路径。');
   return app;
 }
@@ -59,6 +59,42 @@ function discoverCli(app,{platform=process.platform,home=os.homedir(),env=proces
   const cli=cliCandidates(app,{platform,home,env,readdir,stat}).find(exists);
   if(!cli)throw fault('CLI_NOT_FOUND','找不到客户端内置 Codex CLI，请使用 --codex-bin 指定 CLI 的完整路径。');
   return cli;
+}
+function createRuntimeLocator({app='',cli='',platform=process.platform,home=os.homedir(),env=process.env,
+  run=systemRun,exists=fs.existsSync,readdir=fs.readdirSync,stat=fs.statSync}={}) {
+  const p=platform==='win32'?path.win32:path.posix;
+  const normalize=value=>platform==='win32'?p.normalize(value).toLowerCase():p.normalize(value);
+  const inside=(root,value)=>{
+    const relative=p.relative(normalize(root),normalize(value));
+    return relative!==''&&relative!=='..'&&!relative.startsWith('..'+p.sep)&&!p.isAbsolute(relative);
+  };
+  const isStore=value=>platform==='win32'&&/\\windowsapps\\openai\.(?:codex|chatgpt)_[^\\]+\\app\\(?:codex|chatgpt)\.exe$/i.test(p.normalize(value));
+  const managedCli=platform==='win32'?p.join(env.LOCALAPPDATA||p.join(home,'AppData','Local'),'OpenAI','Codex','bin'):null;
+  // Old settings contain absolute paths produced by auto discovery. They are
+  // hints to the current bundled/managed runtime, not permanent CLI overrides.
+  const bundledCli=Boolean(cli&&app&&inside(platform==='win32'?p.dirname(app):app,cli));
+  const managedCliHint=Boolean(cli&&managedCli&&inside(managedCli,cli));
+  const cliOverride=cli&&!bundledCli&&!managedCliHint?cli:null;
+  const options={platform,home,env,run,exists,readdir,stat};
+  // No filesystem or package-manager access until called. A desktop update can
+  // temporarily remove all candidate paths; callers can keep retrying later.
+  return () => {
+    if(!['darwin','win32'].includes(platform))throw fault('UNSUPPORTED_PLATFORM','仅支持 macOS 和原生 Windows。');
+    if(cli&&/\.(?:cmd|bat)$/i.test(cli))throw fault('INVALID_CLI','请指定原生 Codex CLI 可执行文件，不使用 .cmd/.bat 包装脚本。');
+    if(cli&&app&&platform==='win32'&&normalize(cli)===normalize(app))throw fault('INVALID_CLI','桌面客户端 exe 不能作为 Codex CLI。');
+    let currentApp;
+    if(app&&isStore(app)){
+      // Registered Store locations change on every package update. Never pin a
+      // retired WindowsApps directory merely because its files still linger.
+      currentApp=appCandidates(options).filter(isStore).find(exists);
+      if(!currentApp)throw fault('APP_NOT_FOUND','客户端 Store 更新尚未完成，正在等待已注册的桌面程序恢复。');
+    }else{
+      currentApp=discoverApp({...options,explicit:app||undefined});
+    }
+    const currentCli=discoverCli(currentApp,{...options,explicit:cliOverride||undefined});
+    if(/\.(?:cmd|bat)$/i.test(currentCli))throw fault('INVALID_CLI','请指定原生 Codex CLI 可执行文件，不使用 .cmd/.bat 包装脚本。');
+    return {app:currentApp,cli:currentCli};
+  };
 }
 function chromeCandidates(env=process.env,home=os.homedir()) {
   const p=path.win32;return [p.join(env.ProgramFiles||'C:\\Program Files','Google/Chrome/Application/chrome.exe'),p.join(env['ProgramFiles(x86)']||'C:\\Program Files (x86)','Google/Chrome/Application/chrome.exe'),p.join(env.LOCALAPPDATA||p.join(home,'AppData/Local'),'Google/Chrome/Application/chrome.exe')];
@@ -89,4 +125,4 @@ function listProcesses({platform=process.platform,run=systemRun}={}) {
   if(platform==='win32')return psJson("Get-CimInstance Win32_Process -ErrorAction Stop | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress",run).map(x=>({pid:Number(x.ProcessId),executable:x.ExecutablePath||'',commandLine:x.CommandLine||''}));
   return String(run('/bin/ps',['-Ao','pid=,command='])).split('\n').flatMap(line=>{const m=/^\s*(\d+)\s+(.+)$/.exec(line);return m?[{pid:Number(m[1]),executable:'',commandLine:m[2]}]:[];});
 }
-module.exports={DEFAULT_PORT,getPaths,discoverApp,discoverCli,openTarget,appCandidates,cliCandidates,listProcesses,systemRun,fault};
+module.exports={DEFAULT_PORT,getPaths,discoverApp,discoverCli,createRuntimeLocator,openTarget,appCandidates,cliCandidates,listProcesses,systemRun,fault};

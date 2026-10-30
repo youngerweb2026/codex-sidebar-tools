@@ -1,6 +1,6 @@
 ﻿param(
   [Parameter(Position = 0)]
-  [ValidateSet('install', 'launch', 'status', 'uninstall', 'start-agent', 'stop-agent')]
+  [ValidateSet('install', 'launch', 'status', 'uninstall', 'start-agent', 'stop-agent', 'recover')]
   [string]$Action = 'status',
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$Remaining
